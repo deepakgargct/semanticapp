@@ -1,57 +1,63 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForTokenClassification
+from transformers import tokenization_utils_base
 
-# Initialize Hugging Face pipelines
-nlp_zero_shot = pipeline('zero-shot-classification')
-nlp_ner = pipeline('ner')
+# Initialize the zero-shot classification pipeline
+tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-mnli")
+model = AutoModelForSequenceClassification.from_pretrained("facebook/bart-large-mnli")
+nlp_zero_shot = pipeline("zero-shot-classification", model=model, tokenizer=tokenizer)
 
-# Streamlit app title and layout
-st.set_page_config(page_title="📊 Enhanced Semantic Content Analyzer", layout="wide")
-st.title("📊 Enhanced Semantic Content Analyzer")
+# Initialize the NER pipeline
+ner_tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
+ner_model = AutoModelForTokenClassification.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
+nlp_ner = pipeline("ner", model=ner_model, tokenizer=ner_tokenizer)
 
-# Text input area
-text_input = st.text_area("Enter text for semantic analysis:")
+def analyze_zero_shot_classification(text, labels):
+    """ Perform Zero-Shot Classification on the given text. """
+    result = nlp_zero_shot(text, candidate_labels=labels)
+    return result
 
-# Predefined candidate labels for zero-shot classification (you can expand this list)
-labels = ["Technology", "Science", "Politics", "Sports", "Entertainment", "Business", "Healthcare", "Culture"]
+def perform_ner_analysis(text):
+    """ Perform Named Entity Recognition (NER) on the given text. """
+    result = nlp_ner(text)
+    return result
 
-# Function to perform entity recognition
-def extract_entities(text):
-    return nlp_ner(text)
+# Streamlit App Layout
+st.title("Semantic Analysis and Entity Recognition App")
 
-# Function to perform zero-shot classification
-def classify_text(text):
-    return nlp_zero_shot(text, candidate_labels=labels)
+st.sidebar.header("Select Task")
+task = st.sidebar.selectbox("Choose an analysis type", ("Zero-Shot Classification", "Named Entity Recognition"))
 
-# When text is entered, perform both entity analysis and zero-shot classification
-if text_input:
-    # Entity Recognition
-    with st.spinner('Extracting named entities...'):
-        entities = extract_entities(text_input)
+if task == "Zero-Shot Classification":
+    st.header("Zero-Shot Classification")
+    text_input = st.text_area("Enter Text for Classification", "I love the new features of this product!")
+    labels_input = st.text_area("Enter Candidate Labels (comma separated)", "positive, negative, neutral")
     
-    st.write("### Named Entity Recognition (NER):")
-    for entity in entities:
-        st.write(f"- **{entity['word']}**: {entity['entity_group']} (Confidence: {entity['score']:.4f})")
+    if st.button("Analyze"):
+        labels = [label.strip() for label in labels_input.split(",")]
+        if text_input:
+            result = analyze_zero_shot_classification(text_input, labels)
+            st.write("Classification Results:")
+            st.write(result)
+        else:
+            st.warning("Please enter text for classification.")
+            
+elif task == "Named Entity Recognition":
+    st.header("Named Entity Recognition (NER)")
+    text_input_ner = st.text_area("Enter Text for NER", "Barack Obama was born in Hawaii.")
     
-    # Zero-shot Classification
-    with st.spinner('Performing semantic classification...'):
-        classification_result = classify_text(text_input)
-    
-    st.write("### Semantic Classification Results:")
-    st.write(f"Predicted label: **{classification_result['labels'][0]}**")
-    st.write(f"Score: {classification_result['scores'][0]:.4f}")
+    if st.button("Analyze"):
+        if text_input_ner:
+            result_ner = perform_ner_analysis(text_input_ner)
+            st.write("Named Entities:")
+            st.write(result_ner)
+        else:
+            st.warning("Please enter text for NER.")
 
-    # Show all candidate labels and their respective scores
-    st.write("#### All candidate labels and scores:")
-    for label, score in zip(classification_result['labels'], classification_result['scores']):
-        st.write(f"- **{label}**: {score:.4f}")
-
-# Footer
-st.markdown(
-    """
-    ---
-    This app uses the Hugging Face Transformers library for both:
-    - **Zero-Shot Semantic Classification** to categorize text into predefined labels.
-    - **Named Entity Recognition (NER)** to extract entities such as persons, organizations, and locations from the text.
-    """
-)
+# Sidebar info and about
+st.sidebar.subheader("About")
+st.sidebar.info("""
+This app provides two main features:
+1. **Zero-Shot Classification**: Analyze text and classify it into predefined categories without any training.
+2. **Named Entity Recognition (NER)**: Extract named entities such as persons, organizations, and locations from the text.
+""")

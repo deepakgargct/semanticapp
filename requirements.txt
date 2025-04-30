@@ -2,3 +2,4 @@ streamlit
 torch
 transformers
 spacy
+pandas

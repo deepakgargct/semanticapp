@@ -1,5 +1,5 @@
-streamlit
-torch
-transformers
-spacy
-pandas
+streamlit==1.16.0
+textblob==0.15.3
+wordcloud==1.8.2.2
+matplotlib==3.6.3
+plotly==5.11.0

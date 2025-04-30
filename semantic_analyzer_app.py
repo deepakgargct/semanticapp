@@ -32,12 +32,35 @@ if text:
     # Perform Zero-Shot Classification
     result = nlp_zero_shot(text, candidate_labels=categories)
 
-    # Display the result
-    st.write("Predicted Categories:")
-    st.write(f"Text: {text}")
-    st.write(f"Predicted labels: {result['labels']}")
-    st.write(f"Scores: {result['scores']}")
+    # Display the structured output
+    st.subheader("Text Analysis Result")
+
+    # Display the original input text
+    st.write(f"**Input Text:**")
+    st.write(f"{text}")
+
+    # Create a structured output for predicted categories
+    st.write("### Predicted Categories and Scores:")
+    result_df = pd.DataFrame({
+        "Category": result['labels'],
+        "Score": result['scores']
+    })
+
+    st.write(result_df)
+
+    # Optionally, add entity recognition using spaCy
+    import spacy
+    nlp_spacy = spacy.load("en_core_web_sm")
+    doc = nlp_spacy(text)
+    
+    entities = [(ent.text, ent.label_) for ent in doc.ents]
+    
+    if entities:
+        st.write("### Detected Entities:")
+        entities_df = pd.DataFrame(entities, columns=["Entity", "Label"])
+        st.write(entities_df)
+    else:
+        st.write("No entities detected.")
 else:
     st.write("Please enter some text to analyze.")
 
-# Optionally, you can also include an entity analysis using spaCy if needed.

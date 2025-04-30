@@ -1,74 +1,57 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import torch
-from sentence_transformers import SentenceTransformer, util
-import spacy
-import subprocess
-import sys
+from transformers import pipeline
 
-# Ensure spaCy model is downloaded
-def load_spacy_model():
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
-        return spacy.load("en_core_web_sm")
+# Initialize Hugging Face pipelines
+nlp_zero_shot = pipeline('zero-shot-classification')
+nlp_ner = pipeline('ner')
 
-# Load models
-@st.cache_resource
-def load_models():
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    nlp = load_spacy_model()
-    return model, nlp
+# Streamlit app title and layout
+st.set_page_config(page_title="📊 Enhanced Semantic Content Analyzer", layout="wide")
+st.title("📊 Enhanced Semantic Content Analyzer")
 
-model, nlp = load_models()
+# Text input area
+text_input = st.text_area("Enter text for semantic analysis:")
 
-# Streamlit UI
-st.set_page_config(page_title="Semantic Analyzer", layout="wide")
-st.title("📊 Semantic Content Analyzer")
+# Predefined candidate labels for zero-shot classification (you can expand this list)
+labels = ["Technology", "Science", "Politics", "Sports", "Entertainment", "Business", "Healthcare", "Culture"]
 
-st.markdown("""
-This app compares the semantic similarity between a **target keyword** and your page content to help improve contextual relevance.
-""")
+# Function to perform entity recognition
+def extract_entities(text):
+    return nlp_ner(text)
 
-# Sidebar input
-with st.sidebar:
-    st.header("Settings")
-    keyword = st.text_input("🔍 Target Keyword", "data science")
-    top_n = st.slider("🔝 Top N Similar Sentences", min_value=1, max_value=20, value=5)
+# Function to perform zero-shot classification
+def classify_text(text):
+    return nlp_zero_shot(text, candidate_labels=labels)
 
-# Text input
-content = st.text_area("📝 Paste Your Page Content Here:", height=300)
-
-if st.button("Analyze"):
-    if not content.strip():
-        st.warning("Please paste your content before analyzing.")
-        st.stop()
-
-    # Split into sentences
-    doc = nlp(content)
-    sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+# When text is entered, perform both entity analysis and zero-shot classification
+if text_input:
+    # Entity Recognition
+    with st.spinner('Extracting named entities...'):
+        entities = extract_entities(text_input)
     
-    if not sentences:
-        st.error("No valid sentences found in content.")
-        st.stop()
+    st.write("### Named Entity Recognition (NER):")
+    for entity in entities:
+        st.write(f"- **{entity['word']}**: {entity['entity_group']} (Confidence: {entity['score']:.4f})")
+    
+    # Zero-shot Classification
+    with st.spinner('Performing semantic classification...'):
+        classification_result = classify_text(text_input)
+    
+    st.write("### Semantic Classification Results:")
+    st.write(f"Predicted label: **{classification_result['labels'][0]}**")
+    st.write(f"Score: {classification_result['scores'][0]:.4f}")
 
-    # Encode keyword and content
-    keyword_embedding = model.encode(keyword, convert_to_tensor=True)
-    sentence_embeddings = model.encode(sentences, convert_to_tensor=True)
+    # Show all candidate labels and their respective scores
+    st.write("#### All candidate labels and scores:")
+    for label, score in zip(classification_result['labels'], classification_result['scores']):
+        st.write(f"- **{label}**: {score:.4f}")
 
-    # Compute cosine similarities
-    similarities = util.cos_sim(keyword_embedding, sentence_embeddings)[0].cpu().numpy()
-
-    # Create DataFrame with results
-    df = pd.DataFrame({
-        "Sentence": sentences,
-        "Semantic Similarity": similarities
-    }).sort_values(by="Semantic Similarity", ascending=False).head(top_n)
-
-    st.subheader("🔎 Top Matches")
-    st.dataframe(df.style.format({"Semantic Similarity": "{:.3f}"}), use_container_width=True)
-
-    st.subheader("📈 Similarity Score Distribution")
-    st.line_chart(similarities)
+# Footer
+st.markdown(
+    """
+    ---
+    This app uses the Hugging Face Transformers library for both:
+    - **Zero-Shot Semantic Classification** to categorize text into predefined labels.
+    - **Named Entity Recognition (NER)** to extract entities such as persons, organizations, and locations from the text.
+    """
+)

@@ -1,66 +1,121 @@
 import streamlit as st
-from transformers import pipeline
-import torch
-import pandas as pd  # Import pandas to fix the error
+from textblob import TextBlob
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from wordcloud import WordCloud, STOPWORDS
 
-# Initialize the Hugging Face transformer model pipeline
-@st.cache_resource
-def load_model():
-    # Load a zero-shot classification pipeline for semantic analysis
-    nlp_zero_shot = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
-    return nlp_zero_shot
+# Set title for the app
+st.title("Advanced Sentiment & Subjectivity Analysis with TextBlob")
 
-# Define categories for zero-shot classification
-categories = ["politics", "business", "sports", "technology", "entertainment", "health"]
+# User input for a list of texts
+text_input = st.text_area("Enter text for analysis:", "", height=200)
+submit_button = st.button("Analyze Text")
 
-# Streamlit app layout
-st.title("Semantic Analysis with Hugging Face Transformers")
+# Store results for sentiment trend analysis
+if 'sentiment_data' not in st.session_state:
+    st.session_state.sentiment_data = []
 
-st.write(
-    "This app uses Hugging Face's Zero-Shot Classification model to analyze the semantics of a given text. "
-    "It can classify the text into categories such as politics, business, technology, etc."
-)
-
-# Input text area for user
-text = st.text_area("Enter your text:", height=200)
-
-if text:
-    st.write("Analyzing the input text...")
-
-    # Load the model
-    nlp_zero_shot = load_model()
-
-    # Perform Zero-Shot Classification
-    result = nlp_zero_shot(text, candidate_labels=categories)
-
-    # Display the structured output
-    st.subheader("Text Analysis Result")
-
-    # Display the original input text
-    st.write(f"**Input Text:**")
-    st.write(f"{text}")
-
-    # Create a structured output for predicted categories
-    st.write("### Predicted Categories and Scores:")
-    result_df = pd.DataFrame({
-        "Category": result['labels'],
-        "Score": result['scores']
-    })
-
-    st.write(result_df)
-
-    # Optionally, add entity recognition using spaCy
-    import spacy
-    nlp_spacy = spacy.load("en_core_web_sm")
-    doc = nlp_spacy(text)
+# Function to analyze sentiment and subjectivity
+def analyze_sentiment(text):
+    blob = TextBlob(text)
     
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
+    # Sentiment analysis: polarity (-1 to 1) and subjectivity (0 to 1)
+    sentiment = blob.sentiment.polarity
+    subjectivity = blob.sentiment.subjectivity
     
-    if entities:
-        st.write("### Detected Entities:")
-        entities_df = pd.DataFrame(entities, columns=["Entity", "Label"])
-        st.write(entities_df)
+    # Classify sentiment as positive, neutral, or negative
+    if sentiment > 0:
+        sentiment_label = "Positive"
+    elif sentiment < 0:
+        sentiment_label = "Negative"
     else:
-        st.write("No entities detected.")
+        sentiment_label = "Neutral"
+    
+    return sentiment_label, sentiment, subjectivity
+
+# If the button is clicked, analyze the sentiment and add data for trend
+if submit_button and text_input:
+    sentiment_label, sentiment, subjectivity = analyze_sentiment(text_input)
+    
+    # Add sentiment data to session state
+    st.session_state.sentiment_data.append({
+        'text': text_input,
+        'sentiment_label': sentiment_label,
+        'sentiment_score': sentiment,
+        'subjectivity': subjectivity
+    })
+    
+    # Display the results
+    st.subheader("Analysis Results")
+    st.write(f"Sentiment: **{sentiment_label}**")
+    st.write(f"Sentiment Polarity: **{sentiment}**")
+    st.write(f"Subjectivity: **{subjectivity}**")
+    
+    # Display sentiment color
+    if sentiment > 0:
+        st.markdown(f"<div style='color: green; font-size: 20px;'>Sentiment is Positive with polarity {sentiment}</div>", unsafe_allow_html=True)
+    elif sentiment < 0:
+        st.markdown(f"<div style='color: red; font-size: 20px;'>Sentiment is Negative with polarity {sentiment}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div style='color: gray; font-size: 20px;'>Sentiment is Neutral with polarity {sentiment}</div>", unsafe_allow_html=True)
+
+# **Advanced Visualization 1**: Sentiment Trend Analysis (Plotly Graph)
+if len(st.session_state.sentiment_data) > 1:
+    sentiment_scores = [data['sentiment_score'] for data in st.session_state.sentiment_data]
+    sentiment_labels = [data['sentiment_label'] for data in st.session_state.sentiment_data]
+    
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(x=list(range(1, len(sentiment_scores) + 1)),
+                             y=sentiment_scores,
+                             mode='lines+markers',
+                             name='Sentiment Score',
+                             marker=dict(color='blue')))
+    
+    fig.update_layout(title="Sentiment Trend Over Multiple Entries",
+                      xaxis_title="Text Entries",
+                      yaxis_title="Sentiment Score",
+                      showlegend=True)
+    
+    st.plotly_chart(fig)
+
+# **Advanced Visualization 2**: Sentiment Pie Chart (Matplotlib)
+if len(st.session_state.sentiment_data) > 0:
+    sentiment_counts = {"Positive": 0, "Negative": 0, "Neutral": 0}
+    
+    for data in st.session_state.sentiment_data:
+        sentiment_counts[data['sentiment_label']] += 1
+    
+    fig, ax = plt.subplots()
+    ax.pie(sentiment_counts.values(), labels=sentiment_counts.keys(), autopct='%1.1f%%', startangle=90, colors=['green', 'red', 'gray'])
+    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    plt.title('Sentiment Distribution')
+    st.pyplot(fig)
+
+# **Advanced Visualization 3**: Word Cloud (using WordCloud with customization)
+if len(st.session_state.sentiment_data) > 0:
+    all_text = ' '.join([data['text'] for data in st.session_state.sentiment_data])
+    
+    # Custom stopwords list, can be extended by the user
+    custom_stopwords = set(STOPWORDS).union({'the', 'and', 'is', 'to', 'of'})
+    
+    # Create the word cloud
+    wordcloud = WordCloud(
+        width=800,
+        height=400,
+        background_color='white',
+        stopwords=custom_stopwords,
+        max_words=100,
+        colormap='viridis'
+    ).generate(all_text)
+    
+    st.subheader("Word Cloud of Analyzed Texts")
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation="bilinear")
+    plt.axis('off')
+    st.pyplot()
+
+# Provide instructions
 else:
-    st.write("Please enter some text to analyze.")
+    st.write("Please enter some text for sentiment analysis.")
+

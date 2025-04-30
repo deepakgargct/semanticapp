@@ -1,6 +1,7 @@
 import streamlit as st
 from transformers import pipeline
 import torch
+import pandas as pd  # Import pandas to fix the error
 
 # Initialize the Hugging Face transformer model pipeline
 @st.cache_resource
@@ -63,4 +64,3 @@ if text:
         st.write("No entities detected.")
 else:
     st.write("Please enter some text to analyze.")
-

@@ -1,12 +1,8 @@
-streamlit
-sentence-transformers
-scikit-learn
-spacy
-bertopic
+streamlit>=1.23
+spacy>=3.6
+scikit-learn>=1.3
 matplotlib
 seaborn
-umap-learn
-fpdf2
 pandas
-numpy
-torch
+fpdf
+xlsxwriter
